@@ -121,3 +121,8 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+from mongoengine import connect
+
+# This tells MongoEngine to connect to the Docker container
+connect(host="mongodb://root:example@localhost:27019/?authSource=admin")
