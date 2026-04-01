@@ -4,16 +4,18 @@ from django.views.decorators.csrf import csrf_exempt
 from dataclasses import asdict
 
 # Import our Port and Service
-from django_app.port.product_repository import InMemoryProductRepository
+# from django_app.port.product_repository import InMemoryProductRepository
+from django_app.port.product_repository import MongoProductRepository
 from django_app.application_service.product_service import ProductService
 
 # --- THE WIRING (Dependency Injection) ---
 # We create ONE global instance of our dictionary database. 
 # If we put this inside the view function, it would reset to empty on every single request!
-in_memory_db = InMemoryProductRepository()
+# in_memory_db = InMemoryProductRepository()
+real_mongo_db = MongoProductRepository()
 
 # We hand the database to our service
-product_service = ProductService(repository=in_memory_db)
+product_service = ProductService(repository=real_mongo_db)
 
 
 # --- THE WAITER (The View) ---
@@ -62,3 +64,25 @@ def product_list_create_view(request):
             return JsonResponse({"error": str(e)}, status=400) # 400 means "Bad Request"
         except Exception as e:
             return JsonResponse({"error": "Something went wrong processing your request."}, status=500)
+
+@csrf_exempt
+def product_detail_view(request, product_id):
+    
+    # HANDLE DELETE REQUESTS
+    if request.method == 'DELETE':
+        try:
+            # Ask the Chef to delete the product
+            result = product_service.delete_product(product_id)
+            
+            # 200 means "OK, request succeeded"
+            return JsonResponse(result, status=200) 
+            
+        except ValueError as e:
+            # If the ID is fake, the Service raises a ValueError. 
+            # 404 means "Not Found"
+            return JsonResponse({"error": str(e)}, status=404) 
+        except Exception as e:
+            return JsonResponse({"error": "Something went wrong."}, status=500)
+            
+    # If they try to GET or POST to this specific URL, we say "Method Not Allowed" (405)
+    return JsonResponse({"error": "Method not allowed on this URL."}, status=405)
