@@ -5,7 +5,7 @@ from dataclasses import asdict
 
 # Import our Port and Service
 # from django_app.port.product_repository import InMemoryProductRepository
-from django_app.port.product_repository import MongoProductRepository
+from django_app.adapters.mongo import MongoProductRepository
 from django_app.application_service.product_service import ProductService
 
 # --- THE WIRING (Dependency Injection) ---
