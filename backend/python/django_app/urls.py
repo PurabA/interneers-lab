@@ -15,5 +15,7 @@ urlpatterns = [
     path('hello/', hello_world),
     path('greeting/', greeting_view),
     path('products/', views.product_list_create_view, name='product-list-create'),
+    path('products/bulk-upload/', views.product_bulk_upload_view, name='product-bulk-upload'),
     path('products/<str:product_id>/', views.product_detail_view, name='product-detail'),
+    path('categories/', views.category_list_create_view, name='category-list-create'),
 ]

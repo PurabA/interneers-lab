@@ -2,20 +2,18 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from dataclasses import asdict
-
-# Import our Port and Service
+from django_app.adapters.mongo_category import MongoCategoryRepository
+from django_app.application_service.category_service import CategoryService
 # from django_app.port.product_repository import InMemoryProductRepository
 from django_app.adapters.mongo import MongoProductRepository
 from django_app.application_service.product_service import ProductService
 
-# --- THE WIRING (Dependency Injection) ---
-# We create ONE global instance of our dictionary database. 
-# If we put this inside the view function, it would reset to empty on every single request!
 # in_memory_db = InMemoryProductRepository()
 real_mongo_db = MongoProductRepository()
+category_db = MongoCategoryRepository()
+category_service = CategoryService(repository=category_db)
 
-# We hand the database to our service
-product_service = ProductService(repository=real_mongo_db)
+product_service = ProductService(product_repo=real_mongo_db, category_repo=category_db)
 
 
 # --- THE WAITER (The View) ---
@@ -30,8 +28,15 @@ def product_list_create_view(request):
             limit = int(request.GET.get('limit', 10))
             offset = int(request.GET.get('offset', 0))
             
+            # Extract filters from the URL!
+            filters = {}
+            if 'category' in request.GET: filters['category'] = request.GET['category']
+            if 'min_price' in request.GET: filters['min_price'] = request.GET['min_price']
+            if 'max_price' in request.GET: filters['max_price'] = request.GET['max_price']
+            if 'brand' in request.GET: filters['brand'] = request.GET['brand']
+            
             # Ask the Chef for the products
-            products = product_service.get_all_products(limit=limit, offset=offset)
+            products = product_service.get_all_products(limit=limit, offset=offset, filters=filters if filters else None)
             
             # Translate Python dataclasses into standard dictionaries so Django can send them as JSON
             data = [asdict(p) for p in products]
@@ -50,7 +55,7 @@ def product_list_create_view(request):
             new_product = product_service.create_product(
                 name=body.get('name'),
                 description=body.get('description'),
-                category=body.get('category'),
+                category_id=body.get('category_id'),
                 price=body.get('price'),
                 brand=body.get('brand'),
                 quantity=body.get('quantity')
@@ -86,3 +91,47 @@ def product_detail_view(request, product_id):
             
     # If they try to GET or POST to this specific URL, we say "Method Not Allowed" (405)
     return JsonResponse({"error": "Method not allowed on this URL."}, status=405)
+
+@csrf_exempt
+def category_list_create_view(request):
+    if request.method == 'GET':
+        categories = category_service.get_all_categories()
+        data = [{"id": c.id, "title": c.title, "description": c.description} for c in categories]
+        return JsonResponse({"categories": data}, status=200)
+
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            category = category_service.create_category(
+                title=data['title'],
+                description=data.get('description', '')
+            )
+            return JsonResponse({
+                "message": "Category created!", 
+                "category": {"id": category.id, "title": category.title}
+            }, status=201)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
+@csrf_exempt
+def product_bulk_upload_view(request):
+    if request.method == 'POST':
+        # Check if the user actually attached a file called 'file'
+        if 'file' not in request.FILES:
+            return JsonResponse({"error": "No file uploaded. Please attach a CSV file under the key 'file'."}, status=400)
+            
+        csv_file = request.FILES['file']
+        
+        # Check if it's a CSV
+        if not csv_file.name.endswith('.csv'):
+            return JsonResponse({"error": "Invalid file type. Only .csv is allowed."}, status=400)
+
+        try:
+            # Pass the raw file data to the Chef!
+            result = product_service.bulk_upload_products(csv_file.read())
+            return JsonResponse(result, status=200 if result['error_count'] == 0 else 207)  # 207 means "Multi-Status"
+            
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Method not allowed. Use POST."}, status=405)

@@ -14,9 +14,13 @@ class ProductRepository(ABC):
 
     @abstractmethod
     # We add default pagination values here
-    def get_all(self, limit: int = 10, offset: int = 0) -> List[Product]: 
+    def get_all(self, limit: int = 10, offset: int = 0, filters: dict = None) -> List[Product]: 
         pass
 
     @abstractmethod
     def delete(self,product_id:str)->bool:
+        pass
+
+    @abstractmethod
+    def save_many(self, products: List[Product]) -> int:
         pass
